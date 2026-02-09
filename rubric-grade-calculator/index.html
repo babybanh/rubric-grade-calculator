@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rubric Grade Calculator</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div class="header-top">
+          <div>
+            <div class="title-row">
+              <h1>Rubric Grade Calculator</h1>
+              <button id="quickSaveBtn" class="icon-btn" type="button" title="Save Here" aria-label="Save Here">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 3h12l2 2v16H5zM8 3v6h8V3M8 21v-8h8v8" />
+                </svg>
+              </button>
+            </div>
+            <div id="editSetupWrap" class="setup-hover-wrap hidden">
+              <button id="editSetupBtn" class="primary">Edit Setup</button>
+              <div id="summaryTop" class="setup-hover-panel"></div>
+            </div>
+          </div>
+        </div>
+        <details class="top-panel" open>
+          <summary>Grading Progress</summary>
+          <div class="save-toolbar">
+            <button id="saveBtn">Save Here</button>
+            <button id="loadBtn">Load Here</button>
+            <button id="resetEnteredDataBtn" class="warn-lite-btn" type="button">Reset Entered Scores</button>
+            <button id="exportBtn">Download Backup</button>
+            <button id="importBtn">Upload Backup</button>
+            <input id="importFileInput" type="file" accept="application/json" class="file-hidden" />
+          </div>
+          <div class="save-meta">
+            <span class="save-chip">Auto-save ON</span>
+            <span id="lastSavedText" class="save-meta-text">Last saved: --</span>
+            <span class="save-meta-text">Save Here: stores this browser. Load Here: restores that saved version.</span>
+            <span class="save-meta-text">For another computer: download backup, then upload backup there.</span>
+          </div>
+          <p id="saveStatus" class="save-status" aria-live="polite"></p>
+        </details>
+
+        <details class="top-panel">
+          <summary>Report Export</summary>
+          <div class="export-strip">
+            <label class="compact-field">
+              Export class
+              <select id="sheetExportClassSelect"></select>
+            </label>
+            <label class="compact-field">
+              Export student
+              <select id="sheetExportStudentSelect"></select>
+            </label>
+            <button id="exportStudentSheetBtn">Export Student Sheet</button>
+            <button id="exportClassReportBtn">Export Class Report</button>
+          </div>
+        </details>
+      </header>
+
+      <section id="setupView" class="card">
+        <h2>Step 1: Setup</h2>
+        <div class="grid grid-4">
+          <label>
+            Number of sections
+            <input id="sectionCount" type="number" min="1" max="12" value="3" />
+          </label>
+          <label>
+            Number of classes
+            <input id="classCount" type="number" min="1" max="12" value="1" />
+          </label>
+          <label>
+            Help threshold (%)
+            <input id="helpThreshold" type="number" min="0" max="100" step="1" value="70" />
+          </label>
+          <label class="checkbox-label">
+            <input id="includeComments" type="checkbox" checked />
+            Include comment boxes
+          </label>
+        </div>
+
+        <h3>Sections</h3>
+        <p class="hint">
+          Use weights that add to 100. Scores are entered in 10-point steps (0 to 100). Optional
+          deductions can be any number from 0 to 100.
+        </p>
+        <p id="weightMessage" class="small-note" aria-live="polite"></p>
+        <div id="sectionsConfig" class="stack"></div>
+
+        <h3>Classes</h3>
+        <p class="hint">Enter each class and how many students it has.</p>
+        <div id="classesConfig" class="stack"></div>
+
+        <div class="row end">
+          <p id="setupError" class="error" aria-live="polite"></p>
+          <button id="backToGraderBtn" class="hidden" type="button">Back to Grading</button>
+          <button id="createSheetBtn" class="primary">Create Grading Sheet</button>
+        </div>
+      </section>
+
+      <section id="graderView" class="hidden">
+        <details id="overallSummaryPanel" class="card summary-panel" open>
+          <summary>Overall Summary</summary>
+          <div class="summary-panel-body">
+            <div class="summary-metric-grid">
+              <article class="metric-box">
+                <span class="metric-label">Overall average</span>
+                <strong id="overallAverage" class="metric-value">0.0%</strong>
+              </article>
+              <article class="metric-box">
+                <span class="metric-label">Students needing help</span>
+                <strong id="overallHelpCount" class="metric-value">0</strong>
+              </article>
+              <article class="metric-box">
+                <span class="metric-label">Students graded</span>
+                <strong id="overallGradedCount" class="metric-value">0</strong>
+              </article>
+              <article class="metric-box">
+                <span class="metric-label">Classes</span>
+                <strong id="overallClassCount" class="metric-value">0</strong>
+              </article>
+            </div>
+            <div id="overallHelpList" class="help-pill-list"></div>
+            <div id="classSnapshotGrid" class="class-snapshot-grid"></div>
+            <div id="overallNotesGrid" class="grid grid-2">
+              <label>
+                Overall class progress notes
+                <textarea id="overallProgressNote" rows="3"></textarea>
+              </label>
+              <label>
+                Overall support plan (who needs help)
+                <textarea id="overallSupportNote" rows="3"></textarea>
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <section id="classesGrading" class="stack"></section>
+      </section>
+    </main>
+
+    <dialog id="setupWarningDialog" class="warn-dialog">
+      <form method="dialog" class="warn-dialog-card">
+        <h3>Edit Setup?</h3>
+        <p>
+          Returning to setup is safe. Applying setup changes keeps matching grades when possible.
+          Removed classes/students/sections will be dropped.
+        </p>
+        <menu class="warn-actions">
+          <button value="cancel" type="submit">Cancel</button>
+          <button value="continue" type="submit" class="primary">Continue</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="resetDataDialog" class="warn-dialog">
+      <form method="dialog" class="warn-dialog-card">
+        <h3>Reset Entered Scores?</h3>
+        <p>
+          This clears all entered grades, overrides, and notes, but keeps your setup, classes,
+          students, and section names.
+        </p>
+        <menu class="warn-actions">
+          <button value="cancel" type="submit">Cancel</button>
+          <button value="continue" type="submit" class="primary">Reset</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
