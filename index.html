@@ -28,18 +28,20 @@
         <details class="top-panel" open>
           <summary>Grading Progress</summary>
           <div class="save-toolbar">
-            <button id="saveBtn">Save Here</button>
-            <button id="loadBtn">Load Here</button>
-            <button id="resetEnteredDataBtn" class="warn-lite-btn" type="button">Reset Entered Scores</button>
-            <button id="exportBtn">Download Backup</button>
-            <button id="importBtn">Upload Backup</button>
+            <button id="saveBtn" type="button" title="Save now to this browser (auto-save is already on)">Save Here</button>
+            <button
+              id="resetEnteredDataBtn"
+              class="warn-lite-btn"
+              type="button"
+              title="Clear all entered grades and notes, while keeping setup, classes, and students"
+            >Reset Entered Scores</button>
+            <button id="exportBtn" type="button" title="Download a backup file for another device">Download Backup</button>
+            <button id="importBtn" type="button" title="Upload a backup file from another device">Upload Backup</button>
             <input id="importFileInput" type="file" accept="application/json" class="file-hidden" />
           </div>
           <div class="save-meta">
             <span class="save-chip">Auto-save ON</span>
-            <span id="lastSavedText" class="save-meta-text">Last saved: --</span>
-            <span class="save-meta-text">Save Here: stores this browser. Load Here: restores that saved version.</span>
-            <span class="save-meta-text">For another computer: download backup, then upload backup there.</span>
+            <span id="lastSavedText" class="save-meta-text">Saved in this browser. Last saved: --</span>
           </div>
           <p id="saveStatus" class="save-status" aria-live="polite"></p>
         </details>
@@ -55,6 +57,13 @@
               Export student
               <select id="sheetExportStudentSelect"></select>
             </label>
+            <label class="compact-field">
+              Student export mode
+              <select id="sheetExportModeSelect">
+                <option value="single">Selected student</option>
+                <option value="class">All students in class</option>
+              </select>
+            </label>
             <button id="exportStudentSheetBtn">Export Student Sheet</button>
             <button id="exportClassReportBtn">Export Class Report</button>
           </div>
@@ -66,15 +75,15 @@
         <div class="grid grid-4">
           <label>
             Number of sections
-            <input id="sectionCount" type="number" min="1" max="12" value="3" />
+            <input id="sectionCount" type="number" inputmode="numeric" min="1" max="12" value="3" />
           </label>
           <label>
             Number of classes
-            <input id="classCount" type="number" min="1" max="12" value="1" />
+            <input id="classCount" type="number" inputmode="numeric" min="1" max="12" value="1" />
           </label>
           <label>
             Help threshold (%)
-            <input id="helpThreshold" type="number" min="0" max="100" step="1" value="70" />
+            <input id="helpThreshold" type="number" inputmode="numeric" min="0" max="100" step="1" value="70" />
           </label>
           <label class="checkbox-label">
             <input id="includeComments" type="checkbox" checked />

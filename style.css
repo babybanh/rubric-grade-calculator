@@ -1065,6 +1065,10 @@ button.primary:hover {
     width: 100%;
   }
 
+  .export-strip button {
+    width: 100%;
+  }
+
   .setup-hover-panel {
     right: auto;
     left: 0;

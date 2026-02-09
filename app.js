@@ -36,7 +36,6 @@
   const overallSupportNoteEl = document.getElementById("overallSupportNote");
 
   const saveBtn = document.getElementById("saveBtn");
-  const loadBtn = document.getElementById("loadBtn");
   const resetEnteredDataBtn = document.getElementById("resetEnteredDataBtn");
   const exportBtn = document.getElementById("exportBtn");
   const importBtn = document.getElementById("importBtn");
@@ -45,6 +44,7 @@
   const lastSavedTextEl = document.getElementById("lastSavedText");
   const sheetExportClassSelectEl = document.getElementById("sheetExportClassSelect");
   const sheetExportStudentSelectEl = document.getElementById("sheetExportStudentSelect");
+  const sheetExportModeSelectEl = document.getElementById("sheetExportModeSelect");
   const exportStudentSheetBtn = document.getElementById("exportStudentSheetBtn");
   const exportClassReportBtn = document.getElementById("exportClassReportBtn");
 
@@ -113,12 +113,31 @@
   const setLastSavedText = (isoString) => {
     if (!lastSavedTextEl) return;
     if (!isoString) {
-      lastSavedTextEl.textContent = "Last saved: --";
+      lastSavedTextEl.textContent = "Saved in this browser. Last saved: --";
       return;
     }
     const stamp = formatStamp(isoString);
-    lastSavedTextEl.textContent = stamp ? `Last saved: ${stamp}` : "Last saved: --";
+    lastSavedTextEl.textContent = stamp
+      ? `Saved in this browser. Last saved: ${stamp}`
+      : "Saved in this browser. Last saved: --";
   };
+
+  const enableNumberInputQuickReplace = (inputEl) => {
+    if (!(inputEl instanceof HTMLInputElement)) return;
+    const selectAll = () => {
+      requestAnimationFrame(() => {
+        try {
+          inputEl.select();
+        } catch (error) {
+        }
+      });
+    };
+
+    inputEl.addEventListener("focus", selectAll);
+    inputEl.addEventListener("click", selectAll);
+  };
+
+  [sectionCountEl, classCountEl, helpThresholdEl].forEach(enableNumberInputQuickReplace);
 
   const showSetupView = () => {
     graderViewEl.classList.add("hidden");
@@ -1600,74 +1619,90 @@
     `;
   };
 
-  const refreshExportSelectors = () => {
-    if (!sheetExportClassSelectEl || !sheetExportStudentSelectEl || !exportStudentSheetBtn || !exportClassReportBtn) {
-      return;
-    }
+  const exportStudentMode = () =>
+  sheetExportModeSelectEl?.value === "class" ? "class" : "single";
 
-    if (!state.grading || state.grading.classes.length === 0) {
-      sheetExportClassSelectEl.innerHTML = "<option value=\"\">No classes</option>";
-      sheetExportStudentSelectEl.innerHTML = "<option value=\"\">No students</option>";
-      sheetExportClassSelectEl.disabled = true;
-      sheetExportStudentSelectEl.disabled = true;
-      exportStudentSheetBtn.disabled = true;
-      exportClassReportBtn.disabled = true;
-      return;
-    }
+const refreshExportSelectors = () => {
+  if (!sheetExportClassSelectEl || !sheetExportStudentSelectEl || !exportStudentSheetBtn || !exportClassReportBtn) {
+    return;
+  }
 
-    sheetExportClassSelectEl.disabled = false;
-    exportClassReportBtn.disabled = false;
+  const mode = exportStudentMode();
 
-    const currentClassIndex = Number(sheetExportClassSelectEl.value);
-    const safeClassIndex =
-      Number.isInteger(currentClassIndex) &&
-      currentClassIndex >= 0 &&
-      currentClassIndex < state.grading.classes.length
-        ? currentClassIndex
-        : Number.isInteger(state.grading.activeClassIndex) &&
-            state.grading.activeClassIndex >= 0 &&
-            state.grading.activeClassIndex < state.grading.classes.length
-          ? state.grading.activeClassIndex
-          : 0;
+  if (!state.grading || state.grading.classes.length === 0) {
+    sheetExportClassSelectEl.innerHTML = "<option value=\"\">No classes</option>";
+    sheetExportStudentSelectEl.innerHTML = "<option value=\"\">No students</option>";
+    sheetExportClassSelectEl.disabled = true;
+    sheetExportStudentSelectEl.disabled = true;
+    exportStudentSheetBtn.disabled = true;
+    exportClassReportBtn.disabled = true;
+    exportStudentSheetBtn.textContent = "Export Student Sheet";
+    return;
+  }
 
-    sheetExportClassSelectEl.innerHTML = state.grading.classes
-      .map(
-        (classRecord, classIndex) =>
-          `<option value="${classIndex}">${htmlEscape(classRecord.name)}</option>`
-      )
-      .join("");
-    sheetExportClassSelectEl.value = String(safeClassIndex);
+  sheetExportClassSelectEl.disabled = false;
+  exportClassReportBtn.disabled = false;
 
-    const selectedClass = state.grading.classes[safeClassIndex];
-    if (!selectedClass || selectedClass.students.length === 0) {
-      sheetExportStudentSelectEl.innerHTML = "<option value=\"\">No students</option>";
-      sheetExportStudentSelectEl.disabled = true;
-      exportStudentSheetBtn.disabled = true;
-      return;
-    }
-
-    const currentStudentIndex = Number(sheetExportStudentSelectEl.value);
-    const safeStudentIndex =
-      Number.isInteger(currentStudentIndex) &&
-      currentStudentIndex >= 0 &&
-      currentStudentIndex < selectedClass.students.length
-        ? currentStudentIndex
-        : Number.isInteger(selectedClass.selectedStudentIndex)
-        ? selectedClass.selectedStudentIndex
+  const currentClassIndex = Number(sheetExportClassSelectEl.value);
+  const safeClassIndex =
+    Number.isInteger(currentClassIndex) &&
+    currentClassIndex >= 0 &&
+    currentClassIndex < state.grading.classes.length
+      ? currentClassIndex
+      : Number.isInteger(state.grading.activeClassIndex) &&
+          state.grading.activeClassIndex >= 0 &&
+          state.grading.activeClassIndex < state.grading.classes.length
+        ? state.grading.activeClassIndex
         : 0;
 
-    sheetExportStudentSelectEl.innerHTML = selectedClass.students
-      .map((student, studentIndex) => {
-        const suffix = studentHasAnyScore(student) ? ` (${studentFinalScore(student).toFixed(1)}%)` : "";
-        return `<option value="${studentIndex}">${htmlEscape(student.name + suffix)}</option>`;
-      })
-      .join("");
-    sheetExportStudentSelectEl.disabled = false;
-    exportStudentSheetBtn.disabled = false;
-    sheetExportStudentSelectEl.value = String(clamp(safeStudentIndex, 0, selectedClass.students.length - 1));
-  };
+  sheetExportClassSelectEl.innerHTML = state.grading.classes
+    .map(
+      (classRecord, classIndex) =>
+        `<option value="${classIndex}">${htmlEscape(classRecord.name)}</option>`
+    )
+    .join("");
+  sheetExportClassSelectEl.value = String(safeClassIndex);
 
-  const selectedExportIndexes = () => {
+  const selectedClass = state.grading.classes[safeClassIndex];
+  if (!selectedClass || selectedClass.students.length === 0) {
+    sheetExportStudentSelectEl.innerHTML = "<option value=\"\">No students</option>";
+    sheetExportStudentSelectEl.disabled = true;
+    exportStudentSheetBtn.disabled = true;
+    exportStudentSheetBtn.textContent = mode === "class" ? "Export Student Sheets" : "Export Student Sheet";
+    return;
+  }
+
+  const currentStudentIndex = Number(sheetExportStudentSelectEl.value);
+  const safeStudentIndex =
+    Number.isInteger(currentStudentIndex) &&
+    currentStudentIndex >= 0 &&
+    currentStudentIndex < selectedClass.students.length
+      ? currentStudentIndex
+      : Number.isInteger(selectedClass.selectedStudentIndex)
+      ? selectedClass.selectedStudentIndex
+      : 0;
+
+  sheetExportStudentSelectEl.innerHTML = selectedClass.students
+    .map((student, studentIndex) => {
+      const suffix = studentHasAnyScore(student) ? ` (${studentFinalScore(student).toFixed(1)}%)` : "";
+      return `<option value="${studentIndex}">${htmlEscape(student.name + suffix)}</option>`;
+    })
+    .join("");
+
+  if (mode === "class") {
+    sheetExportStudentSelectEl.disabled = true;
+    exportStudentSheetBtn.textContent = "Export Student Sheets";
+  } else {
+    sheetExportStudentSelectEl.disabled = false;
+    exportStudentSheetBtn.textContent = "Export Student Sheet";
+  }
+
+  exportStudentSheetBtn.disabled = false;
+  sheetExportStudentSelectEl.value = String(clamp(safeStudentIndex, 0, selectedClass.students.length - 1));
+};
+
+const selectedExportIndexes = () => {
+
     const classIndex = Number(sheetExportClassSelectEl?.value);
     const studentIndex = Number(sheetExportStudentSelectEl?.value);
     if (!state.grading) return { classIndex: null, studentIndex: null };
@@ -1682,9 +1717,63 @@
     return { classIndex, studentIndex: safeStudentIndex };
   };
 
-  const downloadHtmlFile = (filename, htmlBody) => {
+  const isTouchLikeDevice = () =>
+    window.matchMedia("(max-width: 900px)").matches ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const openExportInTab = (url) => {
+    const tab = window.open(url, "_blank", "noopener");
+    if (!tab) return false;
+    setSaveStatus("Opened in a new tab for Share or Print.", "good");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return true;
+  };
+
+  const tryShareHtmlExport = async (filename, blob, successPrefix) => {
+    if (typeof navigator.share !== "function") return false;
+    try {
+      const file = new File([blob], filename, { type: "text/html" });
+      if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) {
+        return false;
+      }
+      await navigator.share({
+        title: filename,
+        files: [file],
+      });
+      setSaveStatus(`${successPrefix} Shared from your device.`, "good");
+      return true;
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        setSaveStatus("Share canceled.");
+        return true;
+      }
+      return false;
+    }
+  };
+
+  const deliverHtmlExport = (filename, htmlBody, successPrefix) => {
     const blob = new Blob([htmlBody], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
+
+    if (isTouchLikeDevice()) {
+      tryShareHtmlExport(filename, blob, successPrefix).then((shared) => {
+        if (shared) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        if (openExportInTab(url)) return;
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        setSaveStatus(`${successPrefix} Downloaded as HTML.`, "good");
+      });
+      return;
+    }
+
     const link = document.createElement("a");
     link.href = url;
     link.download = filename;
@@ -1692,6 +1781,7 @@
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+    setSaveStatus(`${successPrefix} Downloaded as HTML.`, "good");
   };
 
   const exportBaseStyle = `
@@ -1837,11 +1927,97 @@
     `;
 
     const filenameSafeName = studentRecord.name.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
-    downloadHtmlFile(`${filenameSafeName || "student"}-grade-sheet.html`, html);
-    setSaveStatus(`Exported student sheet for ${studentRecord.name}`, "good");
+    deliverHtmlExport(`${filenameSafeName || "student"}-grade-sheet.html`, html, `Exported student sheet for ${studentRecord.name}.`);
   };
 
-  const exportClassReport = (classIndex) => {
+const exportStudentSheetsByClass = (classIndex) => {
+  const classRecord = state.grading.classes[classIndex];
+  const classMetrics = computeClassMetricsData(classRecord);
+  const classAverageText =
+    classMetrics.classAverage === null ? "--" : `${classMetrics.classAverage.toFixed(1)}%`;
+
+  const studentSheetsHtml = classRecord.students
+    .map((studentRecord) => {
+      const sectionRows = state.grading.sections
+        .map((sectionConfig, sectionIndex) => {
+          const sectionRecord = studentRecord.sections[sectionIndex];
+          const score = sectionScore(sectionConfig, sectionRecord);
+          const comment = sectionRecord.comment.trim();
+          return `
+            <tr>
+              <td>${htmlEscape(sectionConfig.name)}</td>
+              <td>${score === null ? "--" : `${score.toFixed(1)}%`}</td>
+              <td>${sectionConfig.weight}%</td>
+              <td>${comment ? htmlEscape(comment) : "<span class=\"muted\">No comment</span>"}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const finalGrade = studentFinalScore(studentRecord);
+      const finalGradeText = finalGrade === null ? "--" : `${finalGrade.toFixed(1)}%`;
+
+      return `
+        <section class="card student-sheet-page">
+          <h2>${htmlEscape(studentRecord.name)}</h2>
+          <p class="muted">${htmlEscape(classRecord.name)} | Class average ${classAverageText}</p>
+          <section class="metric-grid">
+            <article class="metric"><span>Final grade</span><strong>${finalGradeText}</strong></article>
+            <article class="metric"><span>Class average</span><strong>${classAverageText}</strong></article>
+          </section>
+          <section class="card">
+            <h3>Section Breakdown and Comments</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Section</th>
+                  <th>Section Score</th>
+                  <th>Weight</th>
+                  <th>Comment</th>
+                </tr>
+              </thead>
+              <tbody>${sectionRows}</tbody>
+            </table>
+          </section>
+        </section>
+      `;
+    })
+    .join("");
+
+  const html = `
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>${htmlEscape(classRecord.name)} - Student Sheets</title>
+      ${exportBaseStyle}
+      <style>
+        .student-sheet-page { break-after: page; }
+        .student-sheet-page:last-child { break-after: auto; }
+      </style>
+    </head>
+    <body>
+      <main class="wrap">
+        <section class="head">
+          <h1>${htmlEscape(classRecord.name)} - Student Sheets</h1>
+          <p class="muted">Exported ${htmlEscape(new Date().toLocaleString())}</p>
+        </section>
+        ${studentSheetsHtml}
+      </main>
+    </body>
+    </html>
+  `;
+
+  const filenameSafeName = classRecord.name.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
+  deliverHtmlExport(
+    `${filenameSafeName || "class"}-student-sheets.html`,
+    html,
+    `Exported student sheets for ${classRecord.name}.`
+  );
+};
+
+const exportClassReport = (classIndex) => {
+
     const classRecord = state.grading.classes[classIndex];
     const classMetrics = computeClassMetricsData(classRecord);
 
@@ -1930,8 +2106,7 @@
     `;
 
     const filenameSafeName = classRecord.name.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
-    downloadHtmlFile(`${filenameSafeName || "class"}-report.html`, html);
-    setSaveStatus(`Exported class report for ${classRecord.name}`, "good");
+    deliverHtmlExport(`${filenameSafeName || "class"}-report.html`, html, `Exported class report for ${classRecord.name}.`);
   };
 
   const refreshOverallMetrics = () => {
@@ -2774,17 +2949,6 @@
       scheduleAutoSave();
     });
   }
-  loadBtn.addEventListener("click", () => {
-    if (
-      state.grading &&
-      !window.confirm(
-        "Load Here restores your last saved snapshot from this browser and replaces current unsaved edits. Continue?"
-      )
-    ) {
-      return;
-    }
-    loadFromLocal(false);
-  });
   exportBtn.addEventListener("click", exportToFile);
 
   importBtn.addEventListener("click", () => {
@@ -2809,18 +2973,38 @@
   });
 
   sheetExportStudentSelectEl.addEventListener("change", () => {
+  refreshExportSelectors();
+});
+
+if (sheetExportModeSelectEl) {
+  sheetExportModeSelectEl.addEventListener("change", () => {
     refreshExportSelectors();
   });
+}
 
-  exportStudentSheetBtn.addEventListener("click", () => {
-    if (!state.grading) return;
-    const { classIndex, studentIndex } = selectedExportIndexes();
-    if (classIndex === null || studentIndex === null) {
-      setSaveStatus("Choose a class and student first.", "bad");
-      return;
-    }
-    exportStudentSheet(classIndex, studentIndex);
-  });
+exportStudentSheetBtn.addEventListener("click", () => {
+  if (!state.grading) return;
+  const mode = exportStudentMode();
+  const { classIndex, studentIndex } = selectedExportIndexes();
+
+  if (classIndex === null) {
+    setSaveStatus("Choose a class first.", "bad");
+    return;
+  }
+
+  if (mode === "class") {
+    exportStudentSheetsByClass(classIndex);
+    return;
+  }
+
+  if (studentIndex === null) {
+    setSaveStatus("Choose a student first.", "bad");
+    return;
+  }
+
+  exportStudentSheet(classIndex, studentIndex);
+});
+
 
   exportClassReportBtn.addEventListener("click", () => {
     if (!state.grading) return;
