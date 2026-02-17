@@ -18,7 +18,6 @@
   const createSheetBtn = document.getElementById("createSheetBtn");
   const backToGraderBtn = document.getElementById("backToGraderBtn");
   const editSetupBtn = document.getElementById("editSetupBtn");
-  const quickSaveBtn = document.getElementById("quickSaveBtn");
   const setupWarningDialogEl = document.getElementById("setupWarningDialog");
   const resetDataDialogEl = document.getElementById("resetDataDialog");
   const editSetupWrapEl = document.getElementById("editSetupWrap");
@@ -33,7 +32,10 @@
   const classSnapshotGridEl = document.getElementById("classSnapshotGrid");
   const overallNotesGridEl = document.getElementById("overallNotesGrid");
   const overallProgressNoteEl = document.getElementById("overallProgressNote");
-  const overallSupportNoteEl = document.getElementById("overallSupportNote");
+
+  const globalSearchWrapEl = document.getElementById("globalSearchWrap");
+  const globalSearchInputEl = document.getElementById("globalSearchInput");
+  const globalSearchResultsEl = document.getElementById("globalSearchResults");
 
   const saveBtn = document.getElementById("saveBtn");
   const resetEnteredDataBtn = document.getElementById("resetEnteredDataBtn");
@@ -67,6 +69,10 @@
         buffer: "",
         stamp: 0,
       },
+      globalSearch: {
+        activeIndex: -1,
+        query: "",
+      },
     },
   };
 
@@ -86,6 +92,19 @@
     const parsed = Number(value);
     return Number.isFinite(parsed) ? clamp(parsed, 0, 100) : null;
   };
+
+  const stripDiacritics = (value) => {
+    const raw = String(value ?? "");
+    try {
+      return raw.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+    } catch (error) {
+      return raw;
+    }
+  };
+
+  const normalizeSearchText = (value) => stripDiacritics(value).toLowerCase();
+
+  const escapeRegExp = (value) => String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   const htmlEscape = (value) =>
     String(value ?? "")
@@ -113,13 +132,13 @@
   const setLastSavedText = (isoString) => {
     if (!lastSavedTextEl) return;
     if (!isoString) {
-      lastSavedTextEl.textContent = "Saved in this browser. Last saved: --";
+      lastSavedTextEl.textContent = "Last saved: --";
       return;
     }
     const stamp = formatStamp(isoString);
     lastSavedTextEl.textContent = stamp
-      ? `Saved in this browser. Last saved: ${stamp}`
-      : "Saved in this browser. Last saved: --";
+      ? `Last saved: ${stamp}`
+      : "Last saved: --";
   };
 
   const enableNumberInputQuickReplace = (inputEl) => {
@@ -139,16 +158,322 @@
 
   [sectionCountEl, classCountEl, helpThresholdEl].forEach(enableNumberInputQuickReplace);
 
+  const highlightMatch = (text, query) => {
+    const safeText = String(text ?? "");
+    const trimmed = String(query ?? "").trim();
+    if (!trimmed) return htmlEscape(safeText);
+
+    try {
+      const re = new RegExp(escapeRegExp(trimmed), "i");
+      const match = safeText.match(re);
+      if (!match || match.index === undefined) return htmlEscape(safeText);
+      const start = match.index;
+      const end = start + match[0].length;
+      return `${htmlEscape(safeText.slice(0, start))}<mark>${htmlEscape(
+        safeText.slice(start, end)
+      )}</mark>${htmlEscape(safeText.slice(end))}`;
+    } catch (error) {
+      return htmlEscape(safeText);
+    }
+  };
+
+  const scoreSearchMatch = (haystackRaw, queryRaw) => {
+    const query = normalizeSearchText(queryRaw).trim();
+    if (!query) return null;
+    const haystack = normalizeSearchText(haystackRaw);
+    const index = haystack.indexOf(query);
+    if (index < 0) return null;
+
+    let score = 0;
+    if (index == 0) score += 120;
+    if (index > 0 && /\s/.test(haystack[index - 1])) score += 80;
+    score += Math.max(0, 40 - index);
+    score += Math.min(40, query.length * 4);
+    return { score, index };
+  };
+
+  const buildSearchCandidates = () => {
+    if (!state.grading) return [];
+    const candidates = [];
+
+    state.grading.classes.forEach((classRecord, classIndex) => {
+      candidates.push({
+        kind: "class",
+        classIndex,
+        label: classRecord.name,
+        secondary: "Class",
+        haystack: `${classRecord.name}`,
+      });
+
+      const classNote = String(classRecord.classSupportNote ?? "").trim();
+      if (classNote) {
+        candidates.push({
+          kind: "class-note",
+          classIndex,
+          label: classRecord.name,
+          secondary: "Class note",
+          haystack: `${classRecord.name} ${classNote}`,
+          snippet: classNote,
+        });
+      }
+
+      classRecord.students.forEach((studentRecord, studentIndex) => {
+        candidates.push({
+          kind: "student",
+          classIndex,
+          studentIndex,
+          label: studentRecord.name,
+          secondary: classRecord.name,
+          haystack: `${studentRecord.name} ${classRecord.name}`,
+        });
+
+        studentRecord.sections.forEach((sectionRecord, sectionIndex) => {
+          const comment = String(sectionRecord.comment ?? "").trim();
+          if (!comment) return;
+          const sectionName = state.grading.sections?.[sectionIndex]?.name ?? `Section ${sectionIndex + 1}`;
+          candidates.push({
+            kind: "section-comment",
+            classIndex,
+            studentIndex,
+            sectionIndex,
+            label: studentRecord.name,
+            secondary: `${classRecord.name} · ${sectionName} comment`,
+            haystack: `${studentRecord.name} ${classRecord.name} ${sectionName} ${comment}`,
+            snippet: comment,
+          });
+        });
+      });
+    });
+
+    const overallNote = String(state.grading.overallProgressNote ?? "").trim();
+    if (overallNote) {
+      candidates.push({
+        kind: "overall-note",
+        label: "Overall notes",
+        secondary: "Overall",
+        haystack: `overall notes ${overallNote}`,
+        snippet: overallNote,
+      });
+    }
+
+    return candidates;
+  };
+
+  const buildSnippet = (text, query, limit = 96) => {
+    const raw = String(text ?? "").replace(/\s+/g, " ").trim();
+    if (!raw) return "";
+    const q = normalizeSearchText(query).trim();
+    if (!q) return raw.length > limit ? `${raw.slice(0, limit - 1)}…` : raw;
+
+    const normalized = normalizeSearchText(raw);
+    const idx = normalized.indexOf(q);
+    if (idx < 0) return raw.length > limit ? `${raw.slice(0, limit - 1)}…` : raw;
+
+    const start = Math.max(0, idx - Math.floor(limit / 2));
+    const end = Math.min(raw.length, start + limit);
+    const prefix = start > 0 ? "…" : "";
+    const suffix = end < raw.length ? "…" : "";
+    return `${prefix}${raw.slice(start, end)}${suffix}`;
+  };
+
+  const closeGlobalSearch = () => {
+    if (!globalSearchResultsEl) return;
+    globalSearchResultsEl.classList.add("hidden");
+    globalSearchResultsEl.innerHTML = "";
+    state.ui.globalSearch.activeIndex = -1;
+  };
+
+  const openGlobalSearchResults = (html) => {
+    if (!globalSearchResultsEl) return;
+    globalSearchResultsEl.innerHTML = html;
+    globalSearchResultsEl.classList.remove("hidden");
+  };
+
+  const setGlobalSearchActiveIndex = (nextIndex) => {
+    state.ui.globalSearch.activeIndex = nextIndex;
+    const items = globalSearchResultsEl?.querySelectorAll("[data-role='search-hit']") ?? [];
+    items.forEach((item, index) => {
+      if (!(item instanceof HTMLElement)) return;
+      item.classList.toggle("active", index === nextIndex);
+      item.setAttribute("aria-selected", index === nextIndex ? "true" : "false");
+    });
+  };
+
+  const focusAndFlash = (el) => {
+    if (!(el instanceof HTMLElement)) return;
+    try {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    } catch (error) {
+      el.scrollIntoView();
+    }
+    el.classList.add("search-flash");
+    setTimeout(() => el.classList.remove("search-flash"), 1100);
+    if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+      el.focus();
+    }
+  };
+
+  const applySearchSelection = (hit) => {
+    if (!state.grading || !hit) return;
+
+    const setActiveClass = (classIndex) => {
+      if (!Number.isInteger(classIndex)) return;
+      if (classIndex < 0 || classIndex >= state.grading.classes.length) return;
+      state.grading.activeClassIndex = classIndex;
+      if (sheetExportClassSelectEl) sheetExportClassSelectEl.value = String(classIndex);
+    };
+
+    if (hit.kind === "class") {
+      setActiveClass(hit.classIndex);
+      collapseOverallSummary();
+      renderGrader();
+      scheduleAutoSave();
+      focusAndFlash(classesGradingEl.querySelector(".class-card"));
+      return;
+    }
+
+    if (hit.kind === "class-note") {
+      setActiveClass(hit.classIndex);
+      collapseOverallSummary();
+      renderGrader();
+      scheduleAutoSave();
+      requestAnimationFrame(() => {
+        const note = classesGradingEl.querySelector(
+          `textarea[data-type="class-support-note"][data-class-index="${hit.classIndex}"]`
+        );
+        if (note) focusAndFlash(note);
+      });
+      return;
+    }
+
+    if (hit.kind === "student" || hit.kind === "section-comment") {
+      setActiveClass(hit.classIndex);
+      const classRecord = state.grading.classes[hit.classIndex];
+      if (!classRecord) return;
+      classRecord.selectedStudentIndex = hit.studentIndex;
+      collapseOverallSummary();
+      renderGrader();
+      scheduleAutoSave();
+
+      if (sheetExportStudentSelectEl && !sheetExportStudentSelectEl.disabled) {
+        sheetExportStudentSelectEl.value = String(hit.studentIndex);
+      }
+
+      requestAnimationFrame(() => {
+        if (hit.kind === "student") {
+          focusAndFlash(classesGradingEl.querySelector(".student-name"));
+          return;
+        }
+
+        const sectionCard = classesGradingEl.querySelector(
+          `[data-type="section-card"][data-class-index="${hit.classIndex}"][data-student-index="${hit.studentIndex}"][data-section-index="${hit.sectionIndex}"]`
+        );
+        if (!sectionCard) return;
+        focusAndFlash(sectionCard);
+        const textarea = sectionCard.querySelector("textarea");
+        if (textarea) focusAndFlash(textarea);
+      });
+      return;
+    }
+
+    if (hit.kind === "overall-note") {
+      if (overallSummaryPanelEl) {
+        overallSummaryPanelEl.open = true;
+        clearTimeout(summaryCollapseTimer);
+        overallSummaryPanelEl.classList.remove("closing");
+      }
+      renderGrader();
+      scheduleAutoSave();
+      requestAnimationFrame(() => {
+        if (overallProgressNoteEl) focusAndFlash(overallProgressNoteEl);
+      });
+    }
+  };
+
+  const renderGlobalSearch = (queryRaw) => {
+    const query = String(queryRaw ?? "");
+    const trimmed = query.trim();
+    state.ui.globalSearch.query = query;
+
+    if (!globalSearchResultsEl) return;
+    if (!state.grading || !trimmed) {
+      closeGlobalSearch();
+      return;
+    }
+
+    const candidates = buildSearchCandidates();
+    const hits = [];
+
+    candidates.forEach((candidate) => {
+      const match = scoreSearchMatch(candidate.haystack, trimmed);
+      if (!match) return;
+      hits.push({ ...candidate, score: match.score });
+    });
+
+    hits.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
+    const topHits = hits.slice(0, 10);
+
+    if (topHits.length === 0) {
+      openGlobalSearchResults('<div class="search-empty">No matches.</div>');
+      setGlobalSearchActiveIndex(-1);
+      return;
+    }
+
+    const html = topHits
+      .map((hit, index) => {
+        const snippetSource = hit.snippet ? buildSnippet(hit.snippet, trimmed) : "";
+        const primaryHtml = highlightMatch(hit.label, trimmed);
+        const secondaryHtml = htmlEscape(hit.secondary || "");
+        const snippetHtml = snippetSource
+          ? `<div class="search-snippet">${highlightMatch(snippetSource, trimmed)}</div>`
+          : "";
+
+        const payload = encodeURIComponent(
+          JSON.stringify({
+            kind: hit.kind,
+            classIndex: Number.isInteger(hit.classIndex) ? hit.classIndex : null,
+            studentIndex: Number.isInteger(hit.studentIndex) ? hit.studentIndex : null,
+            sectionIndex: Number.isInteger(hit.sectionIndex) ? hit.sectionIndex : null,
+          })
+        );
+
+        return `
+          <button
+            type="button"
+            class="search-hit"
+            data-role="search-hit"
+            data-payload="${payload}"
+            role="option"
+            aria-selected="${index === 0 ? "true" : "false"}"
+          >
+            <div class="search-hit-top">
+              <div class="search-hit-primary">${primaryHtml}</div>
+              <div class="search-hit-secondary">${secondaryHtml}</div>
+            </div>
+            ${snippetHtml}
+          </button>
+        `;
+      })
+      .join("");
+
+    openGlobalSearchResults(html);
+    setGlobalSearchActiveIndex(0);
+  };
+
   const showSetupView = () => {
     graderViewEl.classList.add("hidden");
     setupViewEl.classList.remove("hidden");
     editSetupWrapEl.classList.add("hidden");
+    if (globalSearchWrapEl) globalSearchWrapEl.classList.add("hidden");
+    if (globalSearchInputEl) globalSearchInputEl.value = "";
+    closeGlobalSearch();
   };
 
   const showGraderView = () => {
     setupViewEl.classList.add("hidden");
     graderViewEl.classList.remove("hidden");
     editSetupWrapEl.classList.remove("hidden");
+    if (globalSearchWrapEl) globalSearchWrapEl.classList.remove("hidden");
   };
 
   const collapseOverallSummary = () => {
@@ -363,7 +688,6 @@
 
       return {
         name: String(classItem?.name ?? `Class ${classIndex + 1}`).trim() || `Class ${classIndex + 1}`,
-        classProgressNote: String(classItem.classProgressNote ?? ""),
         classSupportNote: String(classItem.classSupportNote ?? ""),
         sectionOrder: (() => {
           const fromClass = Array.isArray(classItem?.sectionOrder) ? classItem.sectionOrder : [];
@@ -402,7 +726,6 @@
       includeComments,
       helpThreshold,
       overallProgressNote: String(rawGrading.overallProgressNote ?? ""),
-      overallSupportNote: String(rawGrading.overallSupportNote ?? ""),
       activeClassIndex,
       classes,
     };
@@ -647,11 +970,9 @@
       includeComments: state.setup.includeComments,
       helpThreshold: state.setup.helpThreshold,
       overallProgressNote: "",
-      overallSupportNote: "",
       activeClassIndex: null,
       classes: state.setup.classes.map((classItem, classIndex) => ({
         name: classItem.name.trim() || `Class ${classIndex + 1}`,
-        classProgressNote: "",
         classSupportNote: "",
         sectionOrder: sections.map((_, sectionIndex) => sectionIndex),
         selectedStudentIndex: null,
@@ -702,12 +1023,10 @@
     if (!state.grading) return;
 
     state.grading.overallProgressNote = "";
-    state.grading.overallSupportNote = "";
     state.ui.showAllHelp = false;
     state.ui.expandedSlots = {};
 
     state.grading.classes.forEach((classRecord) => {
-      classRecord.classProgressNote = "";
       classRecord.classSupportNote = "";
 
       classRecord.students.forEach((studentRecord) => {
@@ -912,7 +1231,6 @@
 
       return {
         name: className,
-        classProgressNote: String(oldClass?.classProgressNote ?? ""),
         classSupportNote: String(oldClass?.classSupportNote ?? ""),
         sectionOrder,
         selectedStudentIndex,
@@ -938,7 +1256,6 @@
       includeComments: state.setup.includeComments,
       helpThreshold: state.setup.helpThreshold,
       overallProgressNote: String(existingGrading?.overallProgressNote ?? ""),
-      overallSupportNote: String(existingGrading?.overallSupportNote ?? ""),
       activeClassIndex,
       classes,
     };
@@ -1332,15 +1649,7 @@
         ${
           state.grading.includeComments
             ? `
-          <div class="grid grid-2">
-            <label>
-              Class progress note
-              <textarea
-                rows="2"
-                data-type="class-progress-note"
-                data-class-index="${classIndex}"
-              >${htmlEscape(classRecord.classProgressNote)}</textarea>
-            </label>
+          <div class="grid">
             <label>
               Class support note
               <textarea
@@ -1405,7 +1714,6 @@
         '<div class="student-panel-empty">Select a class card above to open its grading panel.</div>';
     }
     overallProgressNoteEl.value = state.grading.overallProgressNote;
-    overallSupportNoteEl.value = state.grading.overallSupportNote;
     if (overallNotesGridEl) {
       overallNotesGridEl.classList.toggle("hidden", !state.grading.includeComments);
     }
@@ -2094,10 +2402,6 @@ const exportClassReport = (classIndex) => {
             <p><strong>Overall progress:</strong> ${htmlEscape(
               state.grading.overallProgressNote || "No note"
             )}</p>
-            <p><strong>Overall support plan:</strong> ${htmlEscape(
-              state.grading.overallSupportNote || "No note"
-            )}</p>
-            <p><strong>Class progress:</strong> ${htmlEscape(classRecord.classProgressNote || "No note")}</p>
             <p><strong>Class support:</strong> ${htmlEscape(classRecord.classSupportNote || "No note")}</p>
           </section>
         </main>
@@ -2228,7 +2532,7 @@ const exportClassReport = (classIndex) => {
       const snapshot = snapshotForSave();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
       setLastSavedText(snapshot.savedAt);
-      if (!silent) setSaveStatus(`${prefix} ${formatStamp(snapshot.savedAt)}`, "good");
+      if (!silent && prefix) setSaveStatus(prefix, "good");
       return true;
     } catch (error) {
       if (!silent) setSaveStatus("Could not save locally. Use Download Backup instead.", "bad");
@@ -2239,7 +2543,7 @@ const exportClassReport = (classIndex) => {
   const scheduleAutoSave = () => {
     clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(() => {
-      saveToLocal("Auto-saved in this browser", false);
+      saveToLocal("", true);
     }, 450);
   };
 
@@ -2905,13 +3209,6 @@ const exportClassReport = (classIndex) => {
       return;
     }
 
-    if (inputType === "class-progress-note") {
-      const classIndex = Number(target.dataset.classIndex);
-      state.grading.classes[classIndex].classProgressNote = target.value;
-      scheduleAutoSave();
-      return;
-    }
-
     if (inputType === "class-support-note") {
       const classIndex = Number(target.dataset.classIndex);
       state.grading.classes[classIndex].classSupportNote = target.value;
@@ -2925,14 +3222,86 @@ const exportClassReport = (classIndex) => {
     scheduleAutoSave();
   });
 
-  overallSupportNoteEl.addEventListener("input", () => {
-    if (!state.grading) return;
-    state.grading.overallSupportNote = overallSupportNoteEl.value;
-    scheduleAutoSave();
-  });
+  if (globalSearchInputEl && globalSearchResultsEl && globalSearchWrapEl) {
+    globalSearchInputEl.addEventListener("input", () => {
+      renderGlobalSearch(globalSearchInputEl.value);
+    });
 
-  saveBtn.addEventListener("click", () => saveToLocal("Saved in this browser", false));
-  if (quickSaveBtn) quickSaveBtn.addEventListener("click", () => saveToLocal("Saved in this browser", false));
+    globalSearchInputEl.addEventListener("focus", () => {
+      renderGlobalSearch(globalSearchInputEl.value);
+    });
+
+    globalSearchInputEl.addEventListener("keydown", (event) => {
+      if (!globalSearchResultsEl || globalSearchResultsEl.classList.contains("hidden")) return;
+      const hits = Array.from(globalSearchResultsEl.querySelectorAll("[data-role='search-hit']"));
+      if (hits.length === 0) return;
+
+      const key = event.key;
+      if (key === "ArrowDown" || key === "Down") {
+        event.preventDefault();
+        const next = clamp(state.ui.globalSearch.activeIndex + 1, 0, hits.length - 1);
+        setGlobalSearchActiveIndex(next);
+        return;
+      }
+
+      if (key === "ArrowUp" || key === "Up") {
+        event.preventDefault();
+        const next = clamp(state.ui.globalSearch.activeIndex - 1, 0, hits.length - 1);
+        setGlobalSearchActiveIndex(next);
+        return;
+      }
+
+      if (key === "Enter") {
+        event.preventDefault();
+        const active = hits[state.ui.globalSearch.activeIndex] ?? hits[0];
+        if (!(active instanceof HTMLElement)) return;
+        const payload = active.dataset.payload;
+        if (!payload) return;
+        try {
+          const hit = JSON.parse(decodeURIComponent(payload));
+          applySearchSelection(hit);
+          globalSearchInputEl.value = "";
+          closeGlobalSearch();
+          globalSearchInputEl.blur();
+        } catch (error) {
+        }
+        return;
+      }
+
+      if (key === "Escape") {
+        event.preventDefault();
+        globalSearchInputEl.value = "";
+        closeGlobalSearch();
+        globalSearchInputEl.blur();
+      }
+    });
+
+    globalSearchResultsEl.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const hitBtn = target.closest("[data-role='search-hit']");
+      if (!(hitBtn instanceof HTMLElement)) return;
+      const payload = hitBtn.dataset.payload;
+      if (!payload) return;
+      try {
+        const hit = JSON.parse(decodeURIComponent(payload));
+        applySearchSelection(hit);
+        globalSearchInputEl.value = "";
+        closeGlobalSearch();
+        globalSearchInputEl.blur();
+      } catch (error) {
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (globalSearchWrapEl.contains(target)) return;
+      closeGlobalSearch();
+    });
+  }
+
+  saveBtn.addEventListener("click", () => saveToLocal("Saved.", false));
   if (resetEnteredDataBtn) {
     resetEnteredDataBtn.addEventListener("click", async () => {
       if (!state.grading) {
@@ -3050,7 +3419,6 @@ exportStudentSheetBtn.addEventListener("click", () => {
       const className = nextClassName();
       const newClass = {
         name: className,
-        classProgressNote: "",
         classSupportNote: "",
         sectionOrder: state.grading.sections.map((_, sectionIndex) => sectionIndex),
         selectedStudentIndex: 0,

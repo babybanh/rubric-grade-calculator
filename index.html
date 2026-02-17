@@ -13,16 +13,24 @@
           <div>
             <div class="title-row">
               <h1>Rubric Grade Calculator</h1>
-              <button id="quickSaveBtn" class="icon-btn" type="button" title="Save Here" aria-label="Save Here">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 3h12l2 2v16H5zM8 3v6h8V3M8 21v-8h8v8" />
-                </svg>
-              </button>
             </div>
             <div id="editSetupWrap" class="setup-hover-wrap hidden">
               <button id="editSetupBtn" class="primary">Edit Setup</button>
               <div id="summaryTop" class="setup-hover-panel"></div>
             </div>
+          </div>
+          <div id="globalSearchWrap" class="global-search hidden">
+            <label class="global-search-label">
+              <span class="sr-only">Search</span>
+              <input
+                id="globalSearchInput"
+                type="search"
+                placeholder="Search students, classes, comments..."
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <div id="globalSearchResults" class="global-search-results hidden" role="listbox"></div>
           </div>
         </div>
         <details class="top-panel" open>
@@ -40,8 +48,7 @@
             <input id="importFileInput" type="file" accept="application/json" class="file-hidden" />
           </div>
           <div class="save-meta">
-            <span class="save-chip">Auto-save ON</span>
-            <span id="lastSavedText" class="save-meta-text">Saved in this browser. Last saved: --</span>
+            <span id="lastSavedText" class="save-meta-text" title="Saved in this browser. Use Download Backup to move to another device.">Last saved: --</span>
           </div>
           <p id="saveStatus" class="save-status" aria-live="polite"></p>
         </details>
@@ -134,14 +141,10 @@
             </div>
             <div id="overallHelpList" class="help-pill-list"></div>
             <div id="classSnapshotGrid" class="class-snapshot-grid"></div>
-            <div id="overallNotesGrid" class="grid grid-2">
+            <div id="overallNotesGrid" class="grid">
               <label>
-                Overall class progress notes
+                Overall notes
                 <textarea id="overallProgressNote" rows="3"></textarea>
-              </label>
-              <label>
-                Overall support plan (who needs help)
-                <textarea id="overallSupportNote" rows="3"></textarea>
               </label>
             </div>
           </div>
