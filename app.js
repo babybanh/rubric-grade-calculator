@@ -36,6 +36,8 @@
   const globalSearchWrapEl = document.getElementById("globalSearchWrap");
   const globalSearchInputEl = document.getElementById("globalSearchInput");
   const globalSearchResultsEl = document.getElementById("globalSearchResults");
+  const workspaceToolsEl = document.getElementById("workspaceTools");
+  const setupImportBtn = document.getElementById("setupImportBtn");
 
   const saveBtn = document.getElementById("saveBtn");
   const resetEnteredDataBtn = document.getElementById("resetEnteredDataBtn");
@@ -52,7 +54,7 @@
 
   const state = {
     setup: {
-      sectionCount: 3,
+      sectionCount: 1,
       classCount: 1,
       helpThreshold: 70,
       includeComments: true,
@@ -78,6 +80,7 @@
 
   let autoSaveTimer = null;
   let summaryCollapseTimer = null;
+  let importRequestedFromSetup = false;
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -464,6 +467,7 @@
     graderViewEl.classList.add("hidden");
     setupViewEl.classList.remove("hidden");
     editSetupWrapEl.classList.add("hidden");
+    if (workspaceToolsEl) workspaceToolsEl.classList.add("hidden");
     if (globalSearchWrapEl) globalSearchWrapEl.classList.add("hidden");
     if (globalSearchInputEl) globalSearchInputEl.value = "";
     closeGlobalSearch();
@@ -473,6 +477,7 @@
     setupViewEl.classList.add("hidden");
     graderViewEl.classList.remove("hidden");
     editSetupWrapEl.classList.remove("hidden");
+    if (workspaceToolsEl) workspaceToolsEl.classList.remove("hidden");
     if (globalSearchWrapEl) globalSearchWrapEl.classList.remove("hidden");
   };
 
@@ -527,7 +532,7 @@
 
   const createDefaultSection = (index) => ({
     name: `Section ${index + 1}`,
-    weight: 0,
+    weight: index === 0 ? 100 : 0,
     slots: 2,
     scoringMode: "average",
     allowDeductions: false,
@@ -541,6 +546,9 @@
   });
 
   const ensureSetupArrays = () => {
+    if (!Array.isArray(state.setup.sections)) state.setup.sections = [];
+    if (!Array.isArray(state.setup.classes)) state.setup.classes = [];
+
     const sectionCount = clamp(Math.round(numberOr(state.setup.sectionCount, 1)), 1, 12);
     const classCount = clamp(Math.round(numberOr(state.setup.classCount, 1)), 1, 12);
 
@@ -602,7 +610,7 @@
 
   const normalizeSetup = (rawSetup) => {
     const nextSetup = {
-      sectionCount: clamp(Math.round(numberOr(rawSetup?.sectionCount, 3)), 1, 12),
+      sectionCount: clamp(Math.round(numberOr(rawSetup?.sectionCount, 1)), 1, 12),
       classCount: clamp(Math.round(numberOr(rawSetup?.classCount, 1)), 1, 12),
       helpThreshold: clamp(Math.round(numberOr(rawSetup?.helpThreshold, 70)), 0, 100),
       includeComments: rawSetup?.includeComments !== false,
@@ -2612,6 +2620,10 @@ const exportClassReport = (classIndex) => {
       const text = await file.text();
       const snapshot = JSON.parse(text);
       if (!applySnapshot(snapshot)) return;
+      if (importRequestedFromSetup && state.grading) {
+        showGraderView();
+        renderGrader();
+      }
       saveToLocal("Imported and saved", false);
     } catch (error) {
       setSaveStatus("Could not import that file.", "bad");
@@ -3321,13 +3333,22 @@ const exportClassReport = (classIndex) => {
   exportBtn.addEventListener("click", exportToFile);
 
   importBtn.addEventListener("click", () => {
+    importRequestedFromSetup = false;
     importFileInputEl.click();
   });
+
+  if (setupImportBtn) {
+    setupImportBtn.addEventListener("click", () => {
+      importRequestedFromSetup = true;
+      importFileInputEl.click();
+    });
+  }
 
   importFileInputEl.addEventListener("change", async () => {
     const file = importFileInputEl.files?.[0];
     await importFromFile(file);
     importFileInputEl.value = "";
+    importRequestedFromSetup = false;
   });
 
   sheetExportClassSelectEl.addEventListener("change", () => {

@@ -33,87 +33,99 @@
             <div id="globalSearchResults" class="global-search-results hidden" role="listbox"></div>
           </div>
         </div>
-        <details class="top-panel" open>
-          <summary>Grading Progress</summary>
-          <div class="save-toolbar">
-            <button id="saveBtn" type="button" title="Save now to this browser (auto-save is already on)">Save Here</button>
-            <button
-              id="resetEnteredDataBtn"
-              class="warn-lite-btn"
-              type="button"
-              title="Clear all entered grades and notes, while keeping setup, classes, and students"
-            >Reset Entered Scores</button>
-            <button id="exportBtn" type="button" title="Download a backup file for another device">Download Backup</button>
-            <button id="importBtn" type="button" title="Upload a backup file from another device">Upload Backup</button>
-            <input id="importFileInput" type="file" accept="application/json" class="file-hidden" />
-          </div>
-          <div class="save-meta">
-            <span id="lastSavedText" class="save-meta-text" title="Saved in this browser. Use Download Backup to move to another device.">Last saved: --</span>
-          </div>
-          <p id="saveStatus" class="save-status" aria-live="polite"></p>
-        </details>
+        <div id="workspaceTools">
+          <details class="top-panel" open>
+            <summary>Grading Progress</summary>
+            <div class="save-toolbar">
+              <button id="saveBtn" type="button" title="Save now to this browser (auto-save is already on)">Save Here</button>
+              <button
+                id="resetEnteredDataBtn"
+                class="warn-lite-btn"
+                type="button"
+                title="Clear all entered grades and notes, while keeping setup, classes, and students"
+              >Reset Entered Scores</button>
+              <button id="exportBtn" type="button" title="Download a backup file for another device">Download Backup</button>
+              <button id="importBtn" type="button" title="Upload a backup file from another device">Upload Backup</button>
+            </div>
+            <div class="save-meta">
+              <span id="lastSavedText" class="save-meta-text" title="Saved in this browser. Use Download Backup to move to another device.">Last saved: --</span>
+            </div>
+            <p id="saveStatus" class="save-status" aria-live="polite"></p>
+          </details>
 
-        <details class="top-panel">
-          <summary>Report Export</summary>
-          <div class="export-strip">
-            <label class="compact-field">
-              Export class
-              <select id="sheetExportClassSelect"></select>
-            </label>
-            <label class="compact-field">
-              Export student
-              <select id="sheetExportStudentSelect"></select>
-            </label>
-            <label class="compact-field">
-              Student export mode
-              <select id="sheetExportModeSelect">
-                <option value="single">Selected student</option>
-                <option value="class">All students in class</option>
-              </select>
-            </label>
-            <button id="exportStudentSheetBtn">Export Student Sheet</button>
-            <button id="exportClassReportBtn">Export Class Report</button>
-          </div>
-        </details>
+          <details class="top-panel">
+            <summary>Report Export</summary>
+            <div class="export-strip">
+              <label class="compact-field">
+                Export class
+                <select id="sheetExportClassSelect"></select>
+              </label>
+              <label class="compact-field">
+                Export student
+                <select id="sheetExportStudentSelect"></select>
+              </label>
+              <label class="compact-field">
+                Student export mode
+                <select id="sheetExportModeSelect">
+                  <option value="single">Selected student</option>
+                  <option value="class">All students in class</option>
+                </select>
+              </label>
+              <button id="exportStudentSheetBtn">Export Student Sheet</button>
+              <button id="exportClassReportBtn">Export Class Report</button>
+            </div>
+          </details>
+        </div>
+        <input id="importFileInput" type="file" accept="application/json" class="file-hidden" />
       </header>
 
       <section id="setupView" class="card">
-        <h2>Step 1: Setup</h2>
+        <div class="setup-head">
+          <h2>Step 1: Setup</h2>
+          <button id="setupImportBtn" type="button" class="setup-upload-btn">Upload Backup</button>
+        </div>
+
         <div class="grid grid-4">
-          <label>
-            Number of sections
-            <input id="sectionCount" type="number" inputmode="numeric" min="1" max="12" value="3" />
-          </label>
           <label>
             Number of classes
             <input id="classCount" type="number" inputmode="numeric" min="1" max="12" value="1" />
           </label>
           <label>
+            Number of sections
+            <input id="sectionCount" type="number" inputmode="numeric" min="1" max="12" value="1" />
+          </label>
+          <label>
             Help threshold (%)
             <input id="helpThreshold" type="number" inputmode="numeric" min="0" max="100" step="1" value="70" />
           </label>
-          <label class="checkbox-label">
+          <label class="checkbox-label checkbox-compact">
             <input id="includeComments" type="checkbox" checked />
             Include comment boxes
           </label>
         </div>
 
-        <h3>Sections</h3>
-        <p class="hint">
-          Use weights that add to 100. Scores are entered in 10-point steps (0 to 100). Optional
-          deductions can be any number from 0 to 100.
-        </p>
-        <p id="weightMessage" class="small-note" aria-live="polite"></p>
-        <div id="sectionsConfig" class="stack"></div>
+        <div class="setup-side-grid">
+          <article class="setup-panel">
+            <h3>Classes</h3>
+            <p class="hint">Enter each class and how many students it has.</p>
+            <div id="classesConfig" class="stack"></div>
+          </article>
 
-        <h3>Classes</h3>
-        <p class="hint">Enter each class and how many students it has.</p>
-        <div id="classesConfig" class="stack"></div>
+          <article class="setup-panel">
+            <h3>Sections</h3>
+            <p class="hint">
+              Use weights that add to 100. Scores are entered in 10-point steps (0 to 100). Optional
+              deductions can be any number from 0 to 100.
+            </p>
+            <p id="weightMessage" class="small-note" aria-live="polite"></p>
+            <div id="sectionsConfig" class="stack"></div>
+          </article>
+        </div>
 
-        <div class="row end">
+        <div class="setup-actions">
           <p id="setupError" class="error" aria-live="polite"></p>
           <button id="backToGraderBtn" class="hidden" type="button">Back to Grading</button>
-          <button id="createSheetBtn" class="primary">Create Grading Sheet</button>
+          <button id="createSheetBtn" type="button">Create Grading Sheet</button>
         </div>
       </section>
 
